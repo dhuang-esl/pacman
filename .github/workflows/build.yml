@@ -223,12 +223,25 @@ jobs:
     - name: Install dependencies
       run: |
         brew update
-        brew install meson ninja pkg-config libarchive curl gpgme openssl@3 nettle python@3.11
+        brew install meson ninja pkg-config libarchive curl gpgme openssl@3 nettle python@3.11 bash
         
         # Set up environment for OpenSSL
         echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         echo "LDFLAGS=-L$(brew --prefix openssl@3)/lib" >> $GITHUB_ENV
         echo "CPPFLAGS=-I$(brew --prefix openssl@3)/include" >> $GITHUB_ENV
+        
+        # Ensure Homebrew bash is used
+        echo "PATH=$(brew --prefix)/bin:$PATH" >> $GITHUB_ENV
+
+    - name: Verify bash version
+      run: |
+        echo "System bash: $(/bin/bash --version | head -1)"
+        echo "Homebrew bash: $($(brew --prefix)/bin/bash --version | head -1)"
+        echo "Current bash in PATH: $(bash --version | head -1)"
+        
+        # Verify we have bash >= 4.4.0
+        BASH_VERSION=$(bash --version | head -1 | sed 's/.*version \([0-9]*\.[0-9]*\).*/\1/')
+        echo "Detected bash version: $BASH_VERSION"
 
     - name: Setup build
       run: meson setup --buildtype=debug build
