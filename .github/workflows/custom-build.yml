@@ -55,15 +55,32 @@ jobs:
           brew install asciidoc
         fi
         
-        # Set up environment for OpenSSL
-        echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-        echo "LDFLAGS=-L$(brew --prefix openssl@3)/lib" >> $GITHUB_ENV
-        echo "CPPFLAGS=-I$(brew --prefix openssl@3)/include" >> $GITHUB_ENV
+        # Build comprehensive PKG_CONFIG_PATH
+        export PKG_CONFIG_PATH=""
+        PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH"
+        PKG_CONFIG_PATH="$(brew --prefix gettext)/lib/pkgconfig:$PKG_CONFIG_PATH"
+        PKG_CONFIG_PATH="$(brew --prefix libarchive)/lib/pkgconfig:$PKG_CONFIG_PATH"
+        PKG_CONFIG_PATH="$(brew --prefix gpgme)/lib/pkgconfig:$PKG_CONFIG_PATH"
+        PKG_CONFIG_PATH="$(brew --prefix libcurl)/lib/pkgconfig:$PKG_CONFIG_PATH"
+        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
         
-        # Set up environment for gettext (libintl)
-        echo "PKG_CONFIG_PATH=$(brew --prefix gettext)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
-        echo "LDFLAGS=-L$(brew --prefix gettext)/lib $LDFLAGS" >> $GITHUB_ENV
-        echo "CPPFLAGS=-I$(brew --prefix gettext)/include $CPPFLAGS" >> $GITHUB_ENV
+        # Build comprehensive LDFLAGS
+        LDFLAGS=""
+        LDFLAGS="-L$(brew --prefix openssl@3)/lib $LDFLAGS"
+        LDFLAGS="-L$(brew --prefix gettext)/lib $LDFLAGS"
+        LDFLAGS="-L$(brew --prefix libarchive)/lib $LDFLAGS"
+        LDFLAGS="-L$(brew --prefix gpgme)/lib $LDFLAGS"
+        LDFLAGS="-L$(brew --prefix libcurl)/lib $LDFLAGS"
+        echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
+        
+        # Build comprehensive CPPFLAGS
+        CPPFLAGS=""
+        CPPFLAGS="-I$(brew --prefix openssl@3)/include $CPPFLAGS"
+        CPPFLAGS="-I$(brew --prefix gettext)/include $CPPFLAGS"
+        CPPFLAGS="-I$(brew --prefix libarchive)/include $CPPFLAGS"
+        CPPFLAGS="-I$(brew --prefix gpgme)/include $CPPFLAGS"
+        CPPFLAGS="-I$(brew --prefix libcurl)/include $CPPFLAGS"
+        echo "CPPFLAGS=$CPPFLAGS" >> $GITHUB_ENV
         
         # Ensure Homebrew bash is used (required for pacman >= 4.4.0)
         echo "PATH=$(brew --prefix)/bin:$PATH" >> $GITHUB_ENV
@@ -94,6 +111,7 @@ jobs:
         pkg-config --exists --print-errors gpgme && echo "✅ gpgme found"
         pkg-config --exists --print-errors openssl && echo "✅ openssl found"
         ls "$(brew --prefix gettext)/include/libintl.h" && echo "✅ libintl.h found"
+        pkg-config --modversion libarchive && echo "libarchive version: $(pkg-config --modversion libarchive)"
         echo ""
 
     - name: Install dependencies (Ubuntu)
