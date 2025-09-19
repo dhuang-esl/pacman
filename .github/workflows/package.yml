@@ -214,12 +214,17 @@ jobs:
     - name: Install build dependencies
       run: |
         brew update
-        brew install meson ninja pkg-config libarchive curl gpgme openssl@3 nettle python@3.11 bash
+        brew install meson ninja pkg-config libarchive curl gpgme openssl@3 nettle python@3.11 bash gettext
         
         # Set up environment for OpenSSL
         echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         echo "LDFLAGS=-L$(brew --prefix openssl@3)/lib" >> $GITHUB_ENV
         echo "CPPFLAGS=-I$(brew --prefix openssl@3)/include" >> $GITHUB_ENV
+        
+        # Set up environment for gettext (libintl)
+        echo "PKG_CONFIG_PATH=$(brew --prefix gettext)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        echo "LDFLAGS=-L$(brew --prefix gettext)/lib $LDFLAGS" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$(brew --prefix gettext)/include $CPPFLAGS" >> $GITHUB_ENV
         
         # Ensure Homebrew bash is used
         echo "PATH=$(brew --prefix)/bin:$PATH" >> $GITHUB_ENV
@@ -289,13 +294,16 @@ jobs:
           depends_on "gpgme"
           depends_on "openssl@3"
           depends_on "bash"
+          depends_on "gettext"
           depends_on "meson" => :build
           depends_on "ninja" => :build
           depends_on "pkg-config" => :build
           
           def install
-            # Ensure we use Homebrew bash
+            # Ensure we use Homebrew bash and gettext
             ENV.prepend_path "PATH", Formula["bash"].opt_bin
+            ENV.prepend_path "PKG_CONFIG_PATH", Formula["gettext"].opt_lib/"pkgconfig"
+            ENV.prepend_path "PKG_CONFIG_PATH", Formula["openssl@3"].opt_lib/"pkgconfig"
             
             system "meson", "setup", "--prefix=#{prefix}", "build"
             system "ninja", "-C", "build"

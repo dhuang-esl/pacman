@@ -223,12 +223,17 @@ jobs:
     - name: Install dependencies
       run: |
         brew update
-        brew install meson ninja pkg-config libarchive curl gpgme openssl@3 nettle python@3.11 bash
+        brew install meson ninja pkg-config libarchive curl gpgme openssl@3 nettle python@3.11 bash gettext
         
         # Set up environment for OpenSSL
         echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
         echo "LDFLAGS=-L$(brew --prefix openssl@3)/lib" >> $GITHUB_ENV
         echo "CPPFLAGS=-I$(brew --prefix openssl@3)/include" >> $GITHUB_ENV
+        
+        # Set up environment for gettext (libintl)
+        echo "PKG_CONFIG_PATH=$(brew --prefix gettext)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        echo "LDFLAGS=-L$(brew --prefix gettext)/lib $LDFLAGS" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$(brew --prefix gettext)/include $CPPFLAGS" >> $GITHUB_ENV
         
         # Ensure Homebrew bash is used
         echo "PATH=$(brew --prefix)/bin:$PATH" >> $GITHUB_ENV
@@ -242,6 +247,22 @@ jobs:
         # Verify we have bash >= 4.4.0
         BASH_VERSION=$(bash --version | head -1 | sed 's/.*version \([0-9]*\.[0-9]*\).*/\1/')
         echo "Detected bash version: $BASH_VERSION"
+
+    - name: Verify build environment
+      run: |
+        echo "=== Environment Check ==="
+        echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+        echo "LDFLAGS: $LDFLAGS"
+        echo "CPPFLAGS: $CPPFLAGS"
+        echo "PATH: $PATH"
+        echo ""
+        echo "=== Dependency Check ==="
+        pkg-config --exists --print-errors libarchive && echo "✅ libarchive found"
+        pkg-config --exists --print-errors libcurl && echo "✅ libcurl found" 
+        pkg-config --exists --print-errors gpgme && echo "✅ gpgme found"
+        pkg-config --exists --print-errors openssl && echo "✅ openssl found"
+        ls "$(brew --prefix gettext)/include/libintl.h" && echo "✅ libintl.h found"
+        echo ""
 
     - name: Setup build
       run: meson setup --buildtype=debug build
