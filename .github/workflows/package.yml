@@ -56,88 +56,173 @@ jobs:
     - name: Build
       run: ninja -C build
 
-    - name: Create comprehensive package
+    - name: Create macOS .pkg installer
       run: |
-        mkdir -p pkg/usr/local/bin
-        mkdir -p pkg/usr/local/lib
-        mkdir -p pkg/usr/local/share/man/man8
-        mkdir -p pkg/usr/local/share/man/man5
-        mkdir -p pkg/usr/local/etc
+        # Create package structure
+        mkdir -p pkg_root/usr/local/bin
+        mkdir -p pkg_root/usr/local/lib
+        mkdir -p pkg_root/usr/local/share/man/man8
+        mkdir -p pkg_root/usr/local/share/man/man5
+        mkdir -p pkg_root/usr/local/etc
+        mkdir -p pkg_scripts
         
         # Copy binaries
-        cp build/pacman pkg/usr/local/bin/
-        cp build/pacman-conf pkg/usr/local/bin/
-        cp build/testpkg pkg/usr/local/bin/
-        cp build/vercmp pkg/usr/local/bin/
+        cp build/pacman pkg_root/usr/local/bin/
+        cp build/pacman-conf pkg_root/usr/local/bin/
+        cp build/testpkg pkg_root/usr/local/bin/
+        cp build/vercmp pkg_root/usr/local/bin/
         
         # Copy libraries
-        find build -name "libalpm.*" -exec cp {} pkg/usr/local/lib/ \; || true
+        find build -name "libalpm.*" -exec cp {} pkg_root/usr/local/lib/ \; || true
         
         # Copy configuration files
-        cp etc/pacman.conf.in pkg/usr/local/etc/pacman.conf.example || true
-        cp etc/makepkg.conf.in pkg/usr/local/etc/makepkg.conf.example || true
+        cp etc/pacman.conf.in pkg_root/usr/local/etc/pacman.conf.example || true
+        cp etc/makepkg.conf.in pkg_root/usr/local/etc/makepkg.conf.example || true
         
-        # Create installation script
-        cat > pkg/install.sh << 'EOF'
+        # Create post-install script
+        cat > pkg_scripts/postinstall << 'EOF'
         #!/bin/bash
-        echo "Installing Pacman for macOS..."
         
-        # Check if running as root
-        if [[ $EUID -eq 0 ]]; then
-          echo "Don't run this as root. It will install to /usr/local/"
-          exit 1
-        fi
-        
-        # Copy files
-        sudo cp -r usr/local/* /usr/local/
-        
-        echo "Pacman installed successfully!"
+        echo "Pacman for macOS installed successfully!"
+        echo ""
         echo "Binaries installed to: /usr/local/bin/"
         echo "Libraries installed to: /usr/local/lib/"
         echo "Example configs in: /usr/local/etc/"
         echo ""
-        echo "Note: This is pacman built for macOS. Many features may not work as expected."
-        echo "This is primarily useful for learning and experimentation."
+        echo "Add /usr/local/bin to your PATH if not already present:"
+        echo "echo 'export PATH=\"/usr/local/bin:\$PATH\"' >> ~/.zshrc"
+        echo ""
+        echo "IMPORTANT NOTES:"
+        echo "- This is pacman built for macOS - many features may not work as expected"
+        echo "- This is primarily for educational/experimental purposes"
+        echo "- This is NOT a replacement for Homebrew or other macOS package managers"
+        echo "- No package databases or repositories are included"
+        echo ""
+        echo "To verify installation, run: pacman --version"
+        
+        exit 0
         EOF
-        chmod +x pkg/install.sh
+        chmod +x pkg_scripts/postinstall
         
         # Create package info
-        cat > pkg/README.md << EOF
-        # Pacman for macOS
-        
-        This package contains the Arch Linux package manager (pacman) built for macOS.
-        
-        ## Installation
-        
-        1. Extract this package: `tar -xzf pacman-macos-*.tar.gz`
-        2. Run the installer: `./install.sh`
-        
-        ## What's Included
-        
-        - `pacman` - The main package manager
-        - `pacman-conf` - Configuration utility  
-        - `testpkg` - Package testing utility
-        - `vercmp` - Version comparison utility
-        - `libalpm` - Arch Linux Package Management library
-        
-        ## Important Notes
-        
-        - This is NOT a replacement for Homebrew or other macOS package managers
-        - Many pacman features will not work on macOS due to system differences
-        - This build is primarily for educational/experimental purposes
-        - No package databases or repositories are included
-        
-        Built on: $(date)
-        Architecture: $(uname -m)
-        Commit: $(git rev-parse HEAD 2>/dev/null || echo "unknown")
+        cat > Distribution.xml << EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <installer-gui-script minSpecVersion="1">
+            <title>Pacman for macOS</title>
+            <organization>Pacman Development Team</organization>
+            <domains enable_localSystem="true"/>
+            <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+            
+            <!-- Define documents displayed at various steps -->
+            <welcome    file="welcome.html"    mime-type="text/html" />
+            <license    file="license.txt"     mime-type="text/plain" />
+            <conclusion file="conclusion.html" mime-type="text/html" />
+            
+            <!-- List all component packages -->
+            <pkg-ref id="com.pacman.core"
+                     version="7.0.0"
+                     auth="root">pacman-core.pkg</pkg-ref>
+            
+            <!-- List them again here. They can now be organized
+                 as a hierarchy if you want. -->
+            <choices-outline>
+                <line choice="com.pacman.core"/>
+            </choices-outline>
+            
+            <!-- Define each choice above -->
+            <choice
+                id="com.pacman.core"
+                visible="false"
+                title="Pacman Core"
+                description="Pacman package manager binaries and libraries"
+                start_selected="true">
+              <pkg-ref id="com.pacman.core"/>
+            </choice>
+            
+        </installer-gui-script>
         EOF
         
-        # Create tarball with date
-        cd pkg
-        tar -czf ../pacman-macos-$(date +%Y%m%d)-$(uname -m).tar.gz .
+        # Create welcome message
+        cat > welcome.html << EOF
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Welcome</title>
+        </head>
+        <body>
+            <h1>Welcome to Pacman for macOS</h1>
+            <p>This installer will install the Arch Linux package manager (pacman) on your macOS system.</p>
+            <p><strong>Important:</strong> This is an experimental build primarily for educational purposes.</p>
+            <p>Files will be installed to:</p>
+            <ul>
+                <li>/usr/local/bin/ - Executables</li>
+                <li>/usr/local/lib/ - Libraries</li>
+                <li>/usr/local/etc/ - Configuration examples</li>
+            </ul>
+        </body>
+        </html>
+        EOF
+        
+        # Create license file
+        cat > license.txt << EOF
+        This package contains the Arch Linux package manager (pacman) built for macOS.
+        
+        Pacman is licensed under the GNU General Public License version 2 or later.
+        See the full license at: https://www.gnu.org/licenses/gpl-2.0.html
+        
+        This build is provided as-is for educational and experimental purposes.
+        Many features may not work correctly on macOS due to system differences.
+        EOF
+        
+        # Create conclusion message
+        cat > conclusion.html << EOF
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Installation Complete</title>
+        </head>
+        <body>
+            <h1>Installation Complete!</h1>
+            <p>Pacman has been successfully installed on your system.</p>
+            
+            <h2>Next Steps:</h2>
+            <ol>
+                <li>Open Terminal</li>
+                <li>Run: <code>pacman --version</code> to verify installation</li>
+                <li>Check example configs in <code>/usr/local/etc/</code></li>
+            </ol>
+            
+            <h2>Important Notes:</h2>
+            <ul>
+                <li>This is an experimental build for educational purposes</li>
+                <li>Many pacman features will not work on macOS</li>
+                <li>This does not replace Homebrew or other macOS package managers</li>
+            </ul>
+        </body>
+        </html>
+        EOF
+        
+        # Build component package
+        pkgbuild --root pkg_root \
+                 --scripts pkg_scripts \
+                 --identifier com.pacman.core \
+                 --version 7.0.0 \
+                 --install-location / \
+                 pacman-core.pkg
+        
+        # Build final installer package
+        PACKAGE_NAME="Pacman-macOS-$(date +%Y%m%d)-$(uname -m).pkg"
+        productbuild --distribution Distribution.xml \
+                     --resources . \
+                     --package-path . \
+                     "$PACKAGE_NAME"
+        
+        echo "Created installer: $PACKAGE_NAME"
 
-    - name: Upload package
+    - name: Upload macOS .pkg installer
       uses: actions/upload-artifact@v4
       with:
-        name: pacman-macos-package
-        path: pacman-macos-*.tar.gz
+        name: pacman-macos-pkg
+        path: Pacman-macOS-*.pkg
