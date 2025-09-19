@@ -130,7 +130,7 @@ jobs:
         PKG_CONFIG_PATH="$(brew --prefix gettext)/lib/pkgconfig:$PKG_CONFIG_PATH"
         PKG_CONFIG_PATH="$(brew --prefix libarchive)/lib/pkgconfig:$PKG_CONFIG_PATH"
         PKG_CONFIG_PATH="$(brew --prefix gpgme)/lib/pkgconfig:$PKG_CONFIG_PATH"
-        PKG_CONFIG_PATH="$(brew --prefix libcurl)/lib/pkgconfig:$PKG_CONFIG_PATH"
+        PKG_CONFIG_PATH="$(brew --prefix curl)/lib/pkgconfig:$PKG_CONFIG_PATH"
         echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
         
         # Build comprehensive LDFLAGS
@@ -139,7 +139,7 @@ jobs:
         LDFLAGS="-L$(brew --prefix gettext)/lib $LDFLAGS"
         LDFLAGS="-L$(brew --prefix libarchive)/lib $LDFLAGS"
         LDFLAGS="-L$(brew --prefix gpgme)/lib $LDFLAGS"
-        LDFLAGS="-L$(brew --prefix libcurl)/lib $LDFLAGS"
+        LDFLAGS="-L$(brew --prefix curl)/lib $LDFLAGS"
         echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
         
         # Build comprehensive CPPFLAGS
@@ -148,7 +148,7 @@ jobs:
         CPPFLAGS="-I$(brew --prefix gettext)/include $CPPFLAGS"
         CPPFLAGS="-I$(brew --prefix libarchive)/include $CPPFLAGS"
         CPPFLAGS="-I$(brew --prefix gpgme)/include $CPPFLAGS"
-        CPPFLAGS="-I$(brew --prefix libcurl)/include $CPPFLAGS"
+        CPPFLAGS="-I$(brew --prefix curl)/include $CPPFLAGS"
         echo "CPPFLAGS=$CPPFLAGS" >> $GITHUB_ENV
         
         # Ensure Homebrew bash is used
