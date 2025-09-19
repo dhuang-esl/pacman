@@ -1,0 +1,185 @@
+name: Custom Package Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_os:
+        description: 'Target OS'
+        required: true
+        default: 'ubuntu'
+        type: choice
+        options:
+        - ubuntu
+        - archlinux
+        - debian
+        - fedora
+        - macos
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - release
+        - debug
+      enable_docs:
+        description: 'Build documentation'
+        type: boolean
+        default: false
+      custom_options:
+        description: 'Custom meson options (e.g., -Dcrypto=nettle)'
+        required: false
+        default: ''
+
+jobs:
+  custom-build:
+    name: Custom Build (${{ github.event.inputs.target_os }})
+    runs-on: ${{ github.event.inputs.target_os == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    container: ${{ 
+      github.event.inputs.target_os == 'macos' && '' ||
+      github.event.inputs.target_os == 'archlinux' && 'archlinux:base-devel' ||
+      github.event.inputs.target_os == 'debian' && 'debian:bookworm' ||
+      github.event.inputs.target_os == 'fedora' && 'fedora:latest' ||
+      'ubuntu:22.04'
+    }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies (macOS)
+      if: github.event.inputs.target_os == 'macos'
+      run: |
+        # Update Homebrew
+        brew update
+        
+        # Install required dependencies
+        brew install meson ninja pkg-config libarchive curl gpgme openssl@3 nettle python@3.11
+        
+        # Install optional dependencies
+        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
+          brew install asciidoc
+        fi
+        
+        # Set up environment for OpenSSL
+        echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        echo "LDFLAGS=-L$(brew --prefix openssl@3)/lib" >> $GITHUB_ENV
+        echo "CPPFLAGS=-I$(brew --prefix openssl@3)/include" >> $GITHUB_ENV
+
+    - name: Install dependencies (Arch Linux)
+      if: github.event.inputs.target_os == 'archlinux'
+      run: |
+        pacman -Syu --needed --noconfirm \
+          git meson ninja gcc \
+          gpgme libarchive curl openssl nettle \
+          python fakeroot fakechroot
+        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
+          pacman -Syu --needed --noconfirm asciidoc
+        fi
+
+    - name: Install dependencies (Debian)
+      if: github.event.inputs.target_os == 'debian'
+      run: |
+        apt update
+        apt -y install --no-install-recommends \
+          git pkg-config meson ninja-build gcc libtool \
+          libgpgme-dev libarchive-dev libcurl4-openssl-dev libssl-dev \
+          libnettle8-dev gettext python3 python3-setuptools \
+          dash gawk ca-certificates fakeroot fakechroot
+        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
+          apt -y install --no-install-recommends asciidoc
+        fi
+
+    - name: Install dependencies (Fedora)
+      if: github.event.inputs.target_os == 'fedora'
+      run: |
+        dnf -y install \
+          git findutils patch sed meson ninja-build gcc libtool bsdtar \
+          gpgme-devel libarchive-devel libcurl-devel openssl-devel \
+          nettle-devel gettext-devel python3 dash gawk \
+          fakeroot fakechroot perl-Module-Load-Conditional
+        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
+          dnf -y install asciidoc
+        fi
+
+    - name: Install dependencies (Ubuntu)
+      if: github.event.inputs.target_os == 'ubuntu'
+      run: |
+        apt update
+        apt -y install --no-install-recommends \
+          git pkg-config meson ninja-build gcc libtool \
+          libgpgme-dev libarchive-dev libcurl4-openssl-dev libssl-dev \
+          libnettle8-dev gettext python3 python3-setuptools \
+          dash gawk ca-certificates fakeroot fakechroot
+        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
+          apt -y install --no-install-recommends asciidoc
+        fi
+
+    - name: Setup build configuration
+      run: |
+        BUILD_ARGS="--buildtype=${{ github.event.inputs.build_type }}"
+        
+        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
+          BUILD_ARGS="$BUILD_ARGS -Ddoc=enabled"
+        fi
+        
+        if [ -n "${{ github.event.inputs.custom_options }}" ]; then
+          BUILD_ARGS="$BUILD_ARGS ${{ github.event.inputs.custom_options }}"
+        fi
+        
+        echo "Building with options: $BUILD_ARGS"
+        meson setup $BUILD_ARGS build
+
+    - name: Build
+      run: ninja -C build
+
+    - name: Run tests
+      run: |
+        if [ "${{ github.event.inputs.target_os }}" = "macos" ]; then
+          # On macOS, run tests directly (no fakechroot needed)
+          meson test -C build
+        elif command -v fakechroot >/dev/null 2>&1; then
+          fakechroot meson test -C build
+        else
+          meson test -C build
+        fi
+
+    - name: Install to staging directory
+      run: |
+        mkdir -p staging
+        DESTDIR=$PWD/staging ninja -C build install
+
+    - name: Create build info
+      run: |
+        cat > build-info.txt << EOF
+        Build Information
+        =================
+        Target OS: ${{ github.event.inputs.target_os }}
+        Build Type: ${{ github.event.inputs.build_type }}
+        Documentation: ${{ github.event.inputs.enable_docs }}
+        Custom Options: ${{ github.event.inputs.custom_options }}
+        Build Date: $(date)
+        Git Commit: ${{ github.sha }}
+        
+        Files built:
+        $(find staging -type f -executable | head -20)
+        
+        Meson Configuration:
+        $(cat build/meson-info/intro-buildoptions.json | head -50)
+        EOF
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: pacman-custom-${{ github.event.inputs.target_os }}-${{ github.event.inputs.build_type }}
+        path: |
+          staging/
+          build-info.txt
+          build/meson-logs/
+
+    - name: Upload documentation (if built)
+      if: github.event.inputs.enable_docs == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: pacman-docs-${{ github.event.inputs.target_os }}
+        path: build/doc/
