@@ -84,6 +84,7 @@ jobs:
         LDFLAGS="-L$(brew --prefix libarchive)/lib $LDFLAGS"
         LDFLAGS="-L$(brew --prefix gpgme)/lib $LDFLAGS"
         LDFLAGS="-L$(brew --prefix curl)/lib $LDFLAGS"
+        LDFLAGS="-lintl $LDFLAGS"
         echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
         
         # Build comprehensive CPPFLAGS
