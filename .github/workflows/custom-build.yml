@@ -1,59 +1,38 @@
-name: Custom Package Build
+name: Custom Build Pacman
 
 on:
   workflow_dispatch:
     inputs:
-      target_os:
-        description: 'Target OS'
-        required: true
-        default: 'ubuntu'
-        type: choice
-        options:
-        - ubuntu
-        - macos
       build_type:
         description: 'Build type'
         required: true
         default: 'release'
         type: choice
         options:
-        - release
         - debug
-      enable_docs:
-        description: 'Build documentation'
-        type: boolean
-        default: false
-      custom_options:
-        description: 'Custom meson options (e.g., -Dcrypto=nettle)'
+        - release
+      create_package:
+        description: 'Create downloadable package'
         required: false
-        default: ''
+        default: true
+        type: boolean
+
+env:
+  MAKEFLAGS: "-j4"
+  VERBOSE: 1
 
 jobs:
   custom-build:
-    name: Custom Build (${{ github.event.inputs.target_os }})
-    runs-on: ${{ github.event.inputs.target_os == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
-    container: ${{ 
-      github.event.inputs.target_os == 'macos' && '' ||
-      'ubuntu:22.04'
-    }}
-
+    name: Custom Build on macOS
+    runs-on: macos-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install dependencies (macOS)
-      if: github.event.inputs.target_os == 'macos'
+    - name: Install dependencies
       run: |
-        # Update Homebrew
         brew update
-        
-        # Install required dependencies including newer bash and gettext
         brew install meson ninja pkg-config libarchive curl gpgme openssl@3 nettle python@3.11 bash gettext
-        
-        # Install optional dependencies
-        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
-          brew install asciidoc
-        fi
         
         # Build comprehensive PKG_CONFIG_PATH
         export PKG_CONFIG_PATH=""
@@ -83,116 +62,55 @@ jobs:
         CPPFLAGS="-I$(brew --prefix curl)/include $CPPFLAGS"
         echo "CPPFLAGS=$CPPFLAGS" >> $GITHUB_ENV
         
-        # Ensure Homebrew bash is used (required for pacman >= 4.4.0)
+        # Ensure Homebrew bash is used
         echo "PATH=$(brew --prefix)/bin:$PATH" >> $GITHUB_ENV
 
-    - name: Verify bash version (macOS)
-      if: github.event.inputs.target_os == 'macos'
-      run: |
-        echo "System bash: $(/bin/bash --version | head -1)"
-        echo "Homebrew bash: $($(brew --prefix)/bin/bash --version | head -1)"
-        echo "Current bash in PATH: $(bash --version | head -1)"
-        
-        # Verify we have bash >= 4.4.0
-        BASH_VERSION=$(bash --version | head -1 | sed 's/.*version \([0-9]*\.[0-9]*\).*/\1/')
-        echo "Detected bash version: $BASH_VERSION"
-
-    - name: Verify build environment (macOS)
-      if: github.event.inputs.target_os == 'macos'
-      run: |
-        echo "=== Environment Check ==="
-        echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
-        echo "LDFLAGS: $LDFLAGS"
-        echo "CPPFLAGS: $CPPFLAGS"
-        echo "PATH: $PATH"
-        echo ""
-        echo "=== Dependency Check ==="
-        pkg-config --exists --print-errors libarchive && echo "✅ libarchive found"
-        pkg-config --exists --print-errors libcurl && echo "✅ libcurl found" 
-        pkg-config --exists --print-errors gpgme && echo "✅ gpgme found"
-        pkg-config --exists --print-errors openssl && echo "✅ openssl found"
-        ls "$(brew --prefix gettext)/include/libintl.h" && echo "✅ libintl.h found"
-        pkg-config --modversion libarchive && echo "libarchive version: $(pkg-config --modversion libarchive)"
-        echo ""
-
-    - name: Install dependencies (Ubuntu)
-      if: github.event.inputs.target_os == 'ubuntu'
-      run: |
-        apt update
-        apt -y install --no-install-recommends \
-          git pkg-config meson ninja-build gcc libtool \
-          libgpgme-dev libarchive-dev libcurl4-openssl-dev libssl-dev \
-          libnettle8-dev gettext python3 python3-setuptools \
-          dash gawk ca-certificates fakeroot fakechroot
-        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
-          apt -y install --no-install-recommends asciidoc
-        fi
-
-    - name: Setup build configuration
-      run: |
-        BUILD_ARGS="--buildtype=${{ github.event.inputs.build_type }}"
-        
-        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
-          BUILD_ARGS="$BUILD_ARGS -Ddoc=enabled"
-        fi
-        
-        if [ -n "${{ github.event.inputs.custom_options }}" ]; then
-          BUILD_ARGS="$BUILD_ARGS ${{ github.event.inputs.custom_options }}"
-        fi
-        
-        echo "Building with options: $BUILD_ARGS"
-        meson setup $BUILD_ARGS build
+    - name: Setup build
+      run: meson setup --buildtype=${{ github.event.inputs.build_type }} build
 
     - name: Build
       run: ninja -C build
 
-    - name: Run tests
+    - name: Create package
+      if: ${{ github.event.inputs.create_package == 'true' }}
       run: |
-        if [ "${{ github.event.inputs.target_os }}" = "macos" ]; then
-          # On macOS, run tests directly (no fakechroot needed)
-          meson test -C build
-        elif command -v fakechroot >/dev/null 2>&1; then
-          fakechroot meson test -C build
-        else
-          meson test -C build
-        fi
-
-    - name: Install to staging directory
-      run: |
-        mkdir -p staging
-        DESTDIR=$PWD/staging ninja -C build install
-
-    - name: Create build info
-      run: |
-        cat > build-info.txt << EOF
-        Build Information
-        =================
-        Target OS: ${{ github.event.inputs.target_os }}
-        Build Type: ${{ github.event.inputs.build_type }}
-        Documentation: ${{ github.event.inputs.enable_docs }}
-        Custom Options: ${{ github.event.inputs.custom_options }}
-        Build Date: $(date)
-        Git Commit: ${{ github.sha }}
+        mkdir -p pkg/usr/local/bin
+        mkdir -p pkg/usr/local/lib
         
-        Files built:
-        $(find staging -type f -executable | head -20)
+        # Copy binaries
+        cp build/pacman pkg/usr/local/bin/
+        cp build/pacman-conf pkg/usr/local/bin/
+        cp build/testpkg pkg/usr/local/bin/
+        cp build/vercmp pkg/usr/local/bin/
         
-        Meson Configuration:
-        $(cat build/meson-info/intro-buildoptions.json | head -50)
-        EOF
+        # Copy libraries
+        cp build/libalpm.* pkg/usr/local/lib/ || true
+        
+        # Create package info
+        echo "Pacman $(date +%Y%m%d) for macOS" > pkg/PACKAGE_INFO
+        echo "Built on: $(date)" >> pkg/PACKAGE_INFO
+        echo "Build type: ${{ github.event.inputs.build_type }}" >> pkg/PACKAGE_INFO
+        echo "Architecture: $(uname -m)" >> pkg/PACKAGE_INFO
+        
+        # Create tarball
+        cd pkg
+        tar -czf ../pacman-macos-${{ github.event.inputs.build_type }}-$(date +%Y%m%d).tar.gz .
 
-    - name: Upload build artifacts
+    - name: Upload package
+      if: ${{ github.event.inputs.create_package == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: pacman-custom-${{ github.event.inputs.target_os }}-${{ github.event.inputs.build_type }}
+        name: pacman-macos-${{ github.event.inputs.build_type }}-package
+        path: pacman-macos-*.tar.gz
+
+    - name: Upload binaries only
+      if: ${{ github.event.inputs.create_package == 'false' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: pacman-macos-${{ github.event.inputs.build_type }}-binaries
         path: |
-          staging/
-          build-info.txt
-          build/meson-logs/
-
-    - name: Upload documentation (if built)
-      if: github.event.inputs.enable_docs == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: pacman-docs-${{ github.event.inputs.target_os }}
-        path: build/doc/
+          build/pacman
+          build/pacman-conf
+          build/testpkg
+          build/vercmp
+          build/libalpm.*
