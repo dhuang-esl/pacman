@@ -8,27 +8,22 @@ on:
         required: false
         default: 'auto'
       create_deb:
-        description: 'Create DEB package'
+        description: 'Create DEB package (Ubuntu)'
         type: boolean
         default: true
-      create_rpm:
-        description: 'Create RPM package'
+      create_macos:
+        description: 'Create macOS package'
         type: boolean
         default: true
       create_tarball:
         description: 'Create tarball'
         type: boolean
         default: true
-      create_macos:
-        description: 'Create macOS package'
-        type: boolean
-        default: false
 
 jobs:
   build-deb:
-    name: Build DEB Package
+    name: Build DEB Package (Ubuntu)
     runs-on: ubuntu-latest
-    container: debian:bookworm
     if: ${{ github.event.inputs.create_deb == 'true' }}
     steps:
     - name: Checkout code
@@ -36,8 +31,8 @@ jobs:
 
     - name: Install build dependencies
       run: |
-        apt update
-        apt -y install --no-install-recommends \
+        sudo apt-get update
+        sudo apt-get install -y \
           git pkg-config meson gcc libtool \
           libgpgme-dev libarchive-dev libcurl4-openssl-dev libssl-dev \
           gettext python3 python3-setuptools dash gawk ca-certificates \
@@ -85,93 +80,6 @@ jobs:
       with:
         name: pacman-deb
         path: "*.deb"
-
-  build-rpm:
-    name: Build RPM Package
-    runs-on: ubuntu-latest
-    container: fedora:latest
-    if: ${{ github.event.inputs.create_rpm == 'true' }}
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install build dependencies
-      run: |
-        dnf -y install \
-          git findutils patch sed \
-          meson gcc libtool bsdtar \
-          gpgme-devel libarchive-devel libcurl-devel openssl-devel gettext-devel \
-          asciidoc python3 dash gawk \
-          rpm-build rpmdevtools
-
-    - name: Setup version
-      run: |
-        if [ "${{ github.event.inputs.package_version }}" = "auto" ]; then
-          VERSION=$(grep "version :" meson.build | sed "s/.*version : '\(.*\)'.*/\1/")
-        else
-          VERSION="${{ github.event.inputs.package_version }}"
-        fi
-        echo "PACKAGE_VERSION=$VERSION" >> $GITHUB_ENV
-
-    - name: Create RPM spec file
-      run: |
-        mkdir -p ~/rpmbuild/{SOURCES,SPECS,BUILD,RPMS,SRPMS}
-        cat > ~/rpmbuild/SPECS/pacman.spec << EOF
-        Name:           pacman
-        Version:        $PACKAGE_VERSION
-        Release:        1%{?dist}
-        Summary:        A library-based package manager with dependency support
-        
-        License:        GPL-2.0+
-        URL:            https://www.archlinux.org/pacman/
-        Source0:        %{name}-%{version}.tar.gz
-        
-        BuildRequires:  meson gcc libtool
-        BuildRequires:  gpgme-devel libarchive-devel libcurl-devel openssl-devel
-        BuildRequires:  gettext-devel python3
-        Requires:       libarchive libcurl gpgme openssl-libs
-        
-        %description
-        Pacman is a utility which manages software packages in Linux.
-        It uses simple compressed files as a package format, and maintains a
-        text-based package database, just in case some hand tweaking is necessary.
-        
-        %prep
-        %setup -q
-        
-        %build
-        meson setup --prefix=%{_prefix} build
-        ninja -C build
-        
-        %install
-        DESTDIR=%{buildroot} ninja -C build install
-        
-        %files
-        %{_bindir}/*
-        %{_libdir}/*
-        %{_includedir}/*
-        %{_datadir}/*
-        %config(noreplace) %{_sysconfdir}/*
-        
-        %changelog
-        * $(date "+%a %b %d %Y") GitHub Actions <noreply@github.com> - $PACKAGE_VERSION-1
-        - Automated build from GitHub Actions
-        EOF
-
-    - name: Create source tarball
-      run: |
-        tar --exclude='.git' --exclude='.github' -czf ~/rpmbuild/SOURCES/pacman-$PACKAGE_VERSION.tar.gz .
-
-    - name: Build RPM
-      run: |
-        cd ~/rpmbuild/SPECS
-        rpmbuild -ba pacman.spec
-
-    - name: Upload RPM package
-      uses: actions/upload-artifact@v4
-      with:
-        name: pacman-rpm
-        path: "~/rpmbuild/RPMS/x86_64/*.rpm"
 
   build-tarball:
     name: Build Source Tarball
@@ -327,8 +235,8 @@ jobs:
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-deb, build-rpm, build-tarball, build-macos]
-    if: always() && (needs.build-deb.result == 'success' || needs.build-rpm.result == 'success' || needs.build-tarball.result == 'success' || needs.build-macos.result == 'success')
+    needs: [build-deb, build-tarball, build-macos]
+    if: always() && (needs.build-deb.result == 'success' || needs.build-tarball.result == 'success' || needs.build-macos.result == 'success')
     steps:
     - name: Setup version
       run: |
@@ -359,22 +267,16 @@ jobs:
           Automated build of Pacman package manager.
           
           ### Packages
-          - **DEB**: For Debian/Ubuntu systems
-          - **RPM**: For Fedora/RHEL systems  
+          - **DEB**: For Ubuntu/Debian systems
           - **PKG**: For macOS systems
           - **Source**: Source code tarball
           
           ### Installation
           
-          **Debian/Ubuntu:**
+          **Ubuntu/Debian:**
           ```bash
           sudo dpkg -i pacman_*.deb
           sudo apt-get install -f  # Fix dependencies if needed
-          ```
-          
-          **Fedora/RHEL:**
-          ```bash
-          sudo dnf install pacman-*.rpm
           ```
           
           **macOS:**

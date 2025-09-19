@@ -8,10 +8,7 @@ This repository includes comprehensive GitHub Actions workflows for building and
 **Trigger**: Push to main/master, pull requests, manual dispatch
 
 This workflow automatically builds Pacman on multiple platforms:
-- **Arch Linux** (multiple configurations)
-- **Debian/Ubuntu** 
-- **Fedora**
-- **Standard Ubuntu** (host system)
+- **Ubuntu** (native host system)
 - **macOS** (latest)
 
 **Features**:
@@ -24,8 +21,7 @@ This workflow automatically builds Pacman on multiple platforms:
 **Trigger**: Manual dispatch only
 
 Creates distributable packages:
-- **DEB packages** for Debian/Ubuntu
-- **RPM packages** for Fedora/RHEL
+- **DEB packages** for Ubuntu/Debian
 - **PKG packages** for macOS
 - **Source tarballs**
 - **GitHub releases**
@@ -34,7 +30,7 @@ Creates distributable packages:
 **Trigger**: Manual dispatch only
 
 Allows custom builds with user-specified options:
-- Choose target OS (Ubuntu, Arch Linux, Debian, Fedora, **macOS**)
+- Choose target OS (Ubuntu, **macOS**)
 - Choose build type (release, debug)
 - Enable/disable documentation
 - Add custom meson options
@@ -58,7 +54,7 @@ Automatic builds trigger on every push to main/master branches and on pull reque
 2. Select **Custom Package Build** workflow  
 3. Click **Run workflow**
 3. Configure:
-   - **Target OS**: Choose your preferred OS (Ubuntu, Arch Linux, Debian, Fedora, **macOS**)
+   - **Target OS**: Choose your preferred OS (Ubuntu, **macOS**)
    - **Build type**: Release or debug
    - **Enable docs**: Whether to build documentation
    - **Custom options**: Additional meson configuration (e.g., `-Dcrypto=nettle`)
@@ -83,26 +79,17 @@ meson test -C build
 
 ### Platform-Specific Notes
 
-#### Arch Linux
-- Uses `archlinux:base-devel` container
-- Full dependency support
-- Preferred platform for Pacman
-
 #### macOS
 - Uses `macos-latest` runner
 - Homebrew for dependencies
 - Creates `.pkg` installer packages
 - Includes Homebrew formula
 
-#### Debian/Ubuntu  
-- Uses `debian:bookworm` or `ubuntu:22.04`
-- Good compatibility
+#### Ubuntu
+- Uses `ubuntu-latest` runner
+- APT package management
 - Creates `.deb` packages
-
-#### Fedora
-- Uses `fedora:latest` container
-- Creates `.rpm` packages
-- Good for RHEL-compatible systems
+- Good compatibility for most Debian-based systems
 
 ## Output Artifacts
 
@@ -114,7 +101,6 @@ meson test -C build
 
 ### Package Artifacts
 - **DEB**: `pacman_VERSION_amd64.deb`
-- **RPM**: `pacman-VERSION-1.x86_64.rpm`  
 - **PKG**: `pacman-VERSION-macos.pkg`
 - **Homebrew**: `pacman.rb` (formula file)
 - **Source**: `pacman-VERSION-source.tar.gz`
@@ -159,9 +145,7 @@ To modify the build process:
 
 | Platform | Status | Package Format | Notes |
 |----------|--------|----------------|-------|
-| Arch Linux | ✅ Full | tar.xz | Native platform |
-| Ubuntu/Debian | ✅ Full | .deb | Good compatibility |
-| Fedora | ✅ Full | .rpm | RHEL compatible |
+| Ubuntu | ✅ Full | .deb | Good compatibility |
 | macOS | ✅ Full | .pkg, .rb | Homebrew support |
 
 ## Environment Variables

@@ -10,9 +10,6 @@ on:
         type: choice
         options:
         - ubuntu
-        - archlinux
-        - debian
-        - fedora
         - macos
       build_type:
         description: 'Build type'
@@ -37,9 +34,6 @@ jobs:
     runs-on: ${{ github.event.inputs.target_os == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     container: ${{ 
       github.event.inputs.target_os == 'macos' && '' ||
-      github.event.inputs.target_os == 'archlinux' && 'archlinux:base-devel' ||
-      github.event.inputs.target_os == 'debian' && 'debian:bookworm' ||
-      github.event.inputs.target_os == 'fedora' && 'fedora:latest' ||
       'ubuntu:22.04'
     }}
 
@@ -101,42 +95,6 @@ jobs:
         pkg-config --exists --print-errors openssl && echo "✅ openssl found"
         ls "$(brew --prefix gettext)/include/libintl.h" && echo "✅ libintl.h found"
         echo ""
-
-    - name: Install dependencies (Arch Linux)
-      if: github.event.inputs.target_os == 'archlinux'
-      run: |
-        pacman -Syu --needed --noconfirm \
-          git meson ninja gcc \
-          gpgme libarchive curl openssl nettle \
-          python fakeroot fakechroot
-        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
-          pacman -Syu --needed --noconfirm asciidoc
-        fi
-
-    - name: Install dependencies (Debian)
-      if: github.event.inputs.target_os == 'debian'
-      run: |
-        apt update
-        apt -y install --no-install-recommends \
-          git pkg-config meson ninja-build gcc libtool \
-          libgpgme-dev libarchive-dev libcurl4-openssl-dev libssl-dev \
-          libnettle8-dev gettext python3 python3-setuptools \
-          dash gawk ca-certificates fakeroot fakechroot
-        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
-          apt -y install --no-install-recommends asciidoc
-        fi
-
-    - name: Install dependencies (Fedora)
-      if: github.event.inputs.target_os == 'fedora'
-      run: |
-        dnf -y install \
-          git findutils patch sed meson ninja-build gcc libtool bsdtar \
-          gpgme-devel libarchive-devel libcurl-devel openssl-devel \
-          nettle-devel gettext-devel python3 dash gawk \
-          fakeroot fakechroot perl-Module-Load-Conditional
-        if [ "${{ github.event.inputs.enable_docs }}" = "true" ]; then
-          dnf -y install asciidoc
-        fi
 
     - name: Install dependencies (Ubuntu)
       if: github.event.inputs.target_os == 'ubuntu'
